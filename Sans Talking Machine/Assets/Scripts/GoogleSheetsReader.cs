@@ -1,16 +1,22 @@
 ﻿using UnityEngine;
-using GoogleSheetsToUnity;
-
+using GoogleSheetsForUnity;
 
 public class GoogleSheetsReader : MonoBehaviour
 {
+    [System.Serializable]
+    public struct DialogueInfo
+    {
+        public string Timestamp;
+        public string text;
+    }
+
+
 
     public string spreadSheetId, tabName;
     public TextParser TextParser;
 
     private float timer;
     private string _currentDialogueText;
-
 
     // Start is called before the first frame update
     void Start()
@@ -30,25 +36,50 @@ public class GoogleSheetsReader : MonoBehaviour
         timer += Time.deltaTime;
     }
 
-    private void GetDialogue()
+    private void OnEnable()
     {
-        SpreadsheetManager.ReadPublicSpreadsheet(new GSTU_Search(spreadSheetId, tabName), UpdateDialogue);
+        // Suscribe for catching cloud responses.
+        Drive.responseCallback += HandleDriveResponse;
     }
 
-    private void UpdateDialogue(GstuSpreadSheet callBack)
+    private void OnDisable()
     {
-        var itemCount = callBack.columns["text"].Count;
-        var newDialogue = callBack.columns["text"][itemCount - 1].value;
-        print(newDialogue);
+        // Remove listeners.
+        Drive.responseCallback -= HandleDriveResponse;
+    }
 
-        if (!_currentDialogueText.Equals(newDialogue))
+
+
+
+    // Processes the data received from the cloud.
+    public void HandleDriveResponse(Drive.DataContainer dataContainer)
+    {
+        if (dataContainer.QueryType == Drive.QueryType.getTable)
         {
-            _currentDialogueText = newDialogue;
-            TextParser.UpdateText(_currentDialogueText);
+            string rawJSon = dataContainer.payload;
+            //Debug.Log(rawJSon);
+            // Check if the type is correct.
+            if (string.Compare(dataContainer.objType, tabName) == 0)
+            {
+                // Parse from json to the desired object type.
+                // PlayerInfo[] players = JsonHelper.ArrayFromJson<PlayerInfo>(rawJSon);
+                DialogueInfo[] dialogueInfo = JsonHelper.ArrayFromJson<DialogueInfo>(rawJSon);
+                print(dialogueInfo[dialogueInfo.Length - 1].text);
+
+                var newDialogue = dialogueInfo[dialogueInfo.Length - 1].text;
+
+                if (!_currentDialogueText.Equals(newDialogue))
+                {
+                    _currentDialogueText = newDialogue;
+                    TextParser.UpdateText(_currentDialogueText);
+                }
+            }
         }
     }
 
-
-
+    private void GetDialogue()
+    {
+        Drive.GetTable(tabName, true);
+    }
 
 }
